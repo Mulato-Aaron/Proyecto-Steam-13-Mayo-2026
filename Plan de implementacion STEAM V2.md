@@ -384,3 +384,58 @@ lib/
 3. **Escalabilidad del Modelo:** Las subcolecciones (`users/{uid}/licenses`, `users/{uid}/payment_methods`) garantizan particionamiento natural por usuario, optimizando índices y evitando documentos >1MB. Las colecciones raíz (`games`, `orders`, `publishers`) permanecen planas para queries globales.
 
 Este plan garantiza un ciclo de desarrollo predecible, costos Firestore controlados, y una base escalable para evolucionar a funciones avanzadas (logros, comunidad, multijugador) sin reestructurar la capa de datos.
+
+Aquí tienes la sección `dependencies` y `dev_dependencies` lista para tu `pubspec.yaml`, alineada estrictamente con la arquitectura y el stack definidos en el Plan Maestro.
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 🔥 FIREBASE CORE & SERVICIOS
+  firebase_core: ^3.6.0          # Inicialización y configuración de Firebase
+  firebase_auth: ^5.3.0          # Auth: Anónimo, Email/Password, Account Linking
+  cloud_firestore: ^5.4.0        # Base de datos NoSQL, offline cache, transacciones
+  firebase_functions: ^1.0.0     # Backend seguro para validación de precios y generación de licencias
+  firebase_app_check: ^0.3.0     # Protección contra bots y llamadas abusivas a la API
+
+  # 📦 GESTIÓN DE ESTADO & NAVEGACIÓN
+  provider: ^6.1.2               # State management (ChangeNotifier, MultiProvider)
+  go_router: ^14.2.0             # Navegación declarativa, guards de autenticación, deep links
+
+  # 🛠️ UTILIDADES DE NEGOCIO & DATOS
+  intl: ^0.19.0                  # Formateo de monedas (USD/EUR), fechas y números regionales
+  uuid: ^4.5.0                   # Generación de IDs únicos (órdenes, sesiones internas, refs)
+  crypto: ^3.0.3                 # Hashing seguro (SHA-256) para generación de license_key
+  shared_preferences: ^2.3.2     # Persistencia local del carrito y preferencias en modo anónimo
+  cached_network_image: ^3.4.1   # Carga eficiente de portadas/assetos de juegos con cache en disco
+  equatable: ^2.0.5              # Comparación de valor para Entities y Estados (inmutabilidad)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+  # 🏗️ CODEGEN PARA CLEAN ARCHITECTURE (Modelos/DTOs)
+  build_runner: ^2.4.12
+  freezed: ^2.5.7
+  freezed_annotation: ^2.4.4
+  json_serializable: ^6.8.0
+  json_annotation: ^4.9.0
+```
+
+### 📌 NOTAS TÉCNICAS DE INTEGRACIÓN
+
+1. **Versionado:** Se utiliza sintaxis `^` para anclar la versión mayor estable compatible con Dart 3.x. Ejecuta `flutter pub upgrade` para obtener los parches más recientes sin romper compatibilidad.
+2. **Codegen (Freezed + JSON):** Recomendado para la capa `data/models`. Genera automáticamente `fromJson`, `toJson`, `copyWith` y igualdad estructural, manteniendo los DTOs inmutables y alineados con Clean Architecture.
+3. **Seguridad vs Local Storage:** `shared_preferences` se usa exclusivamente para datos no sensibles (carrito anónimo, filtros activos, tema). Para tokens críticos o claves de pago, migra a `flutter_secure_storage` en fases posteriores.
+4. **Setup Rápido:**
+   ```bash
+   flutter pub get
+   dart run build_runner build --delete-conflicting-outputs
+   dart pub global activate flutterfire_cli
+   flutterfire configure --project=YOUR_FIREBASE_PROJECT_ID
+   ```
+5. **Firebase Functions en Pruebas:** Si usas el emulador local (`firebase emulators:start`), asegúrate de inicializar `FirebaseFunctions.instance.useFunctionsEmulator(origin: 'http://127.0.0.1:5001');` en tu `main.dart` antes de cualquier llamada a cloud functions.
+
+Este bloque está optimizado para un ciclo de desarrollo ágil, bajo acoplamiento entre capas, y listo para escalar a producción manteniendo la integridad transaccional y la experiencia de usuario definida en el plan.
