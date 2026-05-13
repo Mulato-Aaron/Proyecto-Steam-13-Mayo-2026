@@ -1,0 +1,162 @@
+-- =============================================================
+-- BASE DE DATOS: bdsteam
+-- DESCRIPCIÓN: Plataforma de distribución digital de videojuegos
+-- ENFOQUE: Comercial, Catálogo y Biblioteca.
+-- =============================================================
+
+-- 1. Gestión de Publicadores
+CREATE TABLE publishers (
+    publisher_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    country_code CHAR(2),
+    website_url VARCHAR(255),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Gestión de Usuarios (Core)
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    email VARCHAR(150) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    display_name VARCHAR(50) NOT NULL,
+    country_code CHAR(2) NOT NULL,
+    currency_code CHAR(3) DEFAULT 'USD',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Sesiones de Usuario
+CREATE TABLE user_sessions (
+    session_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) UNIQUE NOT NULL,
+    device_info TEXT,
+    ip_address VARCHAR(45),
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. Monederos Virtuales (Comercial)
+CREATE TABLE user_wallets (
+    wallet_id SERIAL PRIMARY KEY,
+    user_id INT UNIQUE NOT NULL REFERENCES users(user_id),
+    current_balance DECIMAL(12, 2) DEFAULT 0.00,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. Catálogo de Videojuegos
+CREATE TABLE games (
+    game_id SERIAL PRIMARY KEY,
+    publisher_id INT NOT NULL REFERENCES publishers(publisher_id),
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    release_date DATE,
+    age_rating VARCHAR(10),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. Categorías / Géneros
+CREATE TABLE categories (
+    category_id SERIAL PRIMARY KEY,
+    name VARCHAR(50) UNIQUE NOT NULL,
+    slug VARCHAR(50) UNIQUE NOT NULL
+);
+
+-- 7. Relación N:M Juegos-Categorías
+CREATE TABLE game_categories (
+    game_id INT NOT NULL REFERENCES games(game_id),
+    category_id INT NOT NULL REFERENCES categories(category_id),
+    PRIMARY KEY (game_id, category_id)
+);
+
+-- 8. Plataformas (Windows, MacOS, Linux, etc.)
+CREATE TABLE platforms (
+    platform_id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    os_family VARCHAR(50)
+);
+
+-- 9. Relación N:M Juegos-Plataformas (Compatibilidad técnica)
+CREATE TABLE game_platforms (
+    game_id INT NOT NULL REFERENCES games(game_id),
+    platform_id INT NOT NULL REFERENCES platforms(platform_id),
+    min_requirements JSONB,
+    rec_requirements JSONB,
+    PRIMARY KEY (game_id, platform_id)
+);
+
+-- 10. Ediciones de Juegos (SKUs)
+CREATE TABLE game_editions (
+    edition_id SERIAL PRIMARY KEY,
+    game_id INT NOT NULL REFERENCES games(game_id),
+    edition_name VARCHAR(100) NOT NULL, -- Ej: 'Standard', 'Deluxe', 'GOTY'
+    description TEXT,
+    is_bundle BOOLEAN DEFAULT false
+);
+
+-- 11. Precios y Ofertas (Regionalización)
+CREATE TABLE prices (
+    price_id SERIAL PRIMARY KEY,
+    edition_id INT NOT NULL REFERENCES game_editions(edition_id),
+    country_code CHAR(2) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    discount_pct INT DEFAULT 0,
+    valid_from TIMESTAMP NOT NULL,
+    valid_until TIMESTAMP NOT NULL,
+    is_active BOOLEAN DEFAULT true
+);
+
+-- 12. Métodos de Pago
+CREATE TABLE payment_methods (
+    payment_method_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(user_id),
+    provider VARCHAR(50) NOT NULL, -- 'Stripe', 'PayPal', 'Wallet'
+    provider_token VARCHAR(255),
+    last_four CHAR(4),
+    is_default BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 13. Órdenes de Compra (Cabecera)
+CREATE TABLE orders (
+    order_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(user_id),
+    payment_method_id INT NOT NULL REFERENCES payment_methods(payment_method_id),
+    total_amount DECIMAL(10, 2) NOT NULL,
+    currency_code CHAR(3) NOT NULL,
+    status VARCHAR(20) DEFAULT 'completed', -- 'pending', 'completed', 'refunded'
+    transaction_ref VARCHAR(100) UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Detalle de la Orden (Items)
+CREATE TABLE order_items (
+    order_item_id SERIAL PRIMARY KEY,
+    order_id INT NOT NULL REFERENCES orders(order_id),
+    edition_id INT NOT NULL REFERENCES game_editions(edition_id),
+    unit_price DECIMAL(10, 2) NOT NULL,
+    discount_applied DECIMAL(10, 2) DEFAULT 0.00
+);
+
+-- 15. Licencias y Biblioteca (Propiedad del Usuario)
+CREATE TABLE licenses (
+    license_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(user_id),
+    edition_id INT NOT NULL REFERENCES game_editions(edition_id),
+    order_item_id INT NOT NULL REFERENCES order_items(order_item_id),
+    license_key VARCHAR(100) UNIQUE NOT NULL,
+    status VARCHAR(20) DEFAULT 'active', -- 'active', 'revoked'
+    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================
+-- ÍNDICES PARA OPTIMIZACIÓN
+-- =============================================================
+
+CREATE INDEX idx_games_title ON games(title);
+CREATE INDEX idx_prices_lookup ON prices(edition_id, country_code, is_active);
+CREATE INDEX idx_licenses_user ON licenses(user_id);
+CREATE INDEX idx_orders_user_date ON orders(user_id, created_at DESC);
+CREATE INDEX idx_user_sessions_token ON user_sessions(token_hash);
